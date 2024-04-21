@@ -1,4 +1,3 @@
-import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import xlwings as xw
@@ -7,17 +6,12 @@ from dateutil.relativedelta import relativedelta
 import yfinance as yf
 import os
 import time
-import random
 
 
 from selenium import webdriver
-import chromedriver_autoinstaller
 from selenium.webdriver.chrome.options import Options
-from webdriver_manager.chrome import ChromeDriverManager
-from webdriver_manager.core.utils import ChromeType
+
 from selenium.webdriver.common.by import By
-from selenium.webdriver.common.keys import Keys
-import chromedriver_binary
 options = Options()
 options.add_argument('--disable-extensions');
 options.add_argument('--proxy-server="direct://"');
@@ -52,9 +46,11 @@ def get_yahoo_finance_data(file_name:str, tickers:list, daily_change: str, volum
         new_data = yf.download(tickers[i], start=start_date).reset_index()[columns] # Data:'Open, High, Low, Close'
         
         if daily_change != None:
-            close_data = pd.DataFrame([sheet.range(f'{daily_change}{last_row}').value]).append(list(new_data['Close']))
+            close_data = list(pd.DataFrame([sheet.range(f'{daily_change}{last_row}').value]).values)
+            close_data += list(new_data[['Close']].values)
+
             close_func = lambda x: ((x.iloc[1]-x.iloc[0])/x.iloc[0])*100
-            new_data['Change%'] = close_data.rolling(window=2).apply(close_func).round(2).dropna().values # Data:'Change%'
+            new_data['Change%'] = pd.Series(close_data).rolling(window=2).apply(close_func).round(2).dropna().values # Data:'Change%'
     
         if volumes != None:
             new_volume = yf.download(volumes[i], start=start_date).reset_index()[['Date', 'Volume']]
@@ -153,7 +149,7 @@ def get_pcr():
         for d in data_list:
             add_dict[d.split(' ')[0]] = d.split(' ')[-1]
             
-        add_df = add_df.append(add_dict, ignore_index=True)
+        add_df.loc[len(add_df)] = add_dict
     
     # add option data into excel sheet
     sheet.range(f'A{last_row+1}').value = add_df.values
@@ -200,7 +196,7 @@ def get_aaii(load_sheet_delete=True):
     Downloaded excel file before running this function will be removed, if its input is still True.
     Reference -> https://www.aaii.com/sentimentsurvey
     """
-    load_sheet = pd.read_excel(io=r'C:\Users\runru\Downloads\sentiment.xls', sheet_name='SENTIMENT').iloc[4:, :4]
+    load_sheet = pd.read_excel(io='C:/Users/runru/Downloads/sentiment.xls', sheet_name='SENTIMENT').iloc[4:, :4]
     load_sheet.columns = ['Date', 'Bullish', 'Neutral', 'Bearish']
     load_sheet_lday = list(filter(lambda x: type(x) == datetime.datetime, load_sheet['Date']))[-1]
     
@@ -323,7 +319,8 @@ def web_scrape(url: str, css_selector: str):
     #chromedriver_autoinstaller.install()
     
     path_to_chromedriver = 'C:/Users/runru/Analysis_Data_Python/Finance/chromedriver.exe'
-    driver = webdriver.Chrome(executable_path=path_to_chromedriver)
+    service = webdriver.ChromeService(path_to_chromedriver)
+    driver = webdriver.Chrome(options, service)
         
     driver.implicitly_wait(10)
     driver.get(url)
